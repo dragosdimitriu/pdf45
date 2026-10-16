@@ -40,6 +40,7 @@ def _render() -> str:
         for name, licence, url, note in CREDITS
     )
     return (
+        "<p><b>@Ciutalii boemi - o eternă sursă de inspirație!</b></p>"
         "<p>pdf/45 is free software (GPL-3.0-or-later). It exists thanks to "
         "these free and open-source projects:</p>"
         f"<ul>{rows}</ul>"

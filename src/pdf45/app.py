@@ -601,7 +601,7 @@ class MainWindow(QMainWindow):
             self,
             f"About {APP_NAME}",
             f"<h3>{APP_NAME} {__version__}</h3>"
-            "<p>A small, free PDF viewer for Windows and Linux.</p>"
+            "<p>You are welcome, Adobe!</p>"
             "<p>Copyright © 2026 Dragos Dimitriu.<br>"
             "Licensed under the GNU General Public License, version 3 or later.<br>"
             "This program comes with ABSOLUTELY NO WARRANTY.</p>"
