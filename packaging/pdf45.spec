@@ -16,6 +16,32 @@ RES = SRC / "pdf45" / "resources"
 
 is_windows = sys.platform.startswith("win")
 
+
+def windows_version_info():
+    """Version resource shown in Explorer -> Properties -> Details (Windows only)."""
+    from PyInstaller.utils.win32.versioninfo import (
+        FixedFileInfo, StringFileInfo, StringStruct, StringTable, VarFileInfo, VarStruct, VSVersionInfo)
+
+    sys.path.insert(0, str(SRC))
+    import pdf45
+
+    nums = tuple(int(x) for x in pdf45.__version__.split(".")[:3]) + (0,)
+    strings = [
+        StringStruct("CompanyName", pdf45.PUBLISHER),
+        StringStruct("FileDescription", "pdf/45 PDF viewer"),
+        StringStruct("FileVersion", pdf45.__version__),
+        StringStruct("InternalName", "pdf45"),
+        StringStruct("LegalCopyright", "Copyright (C) 2026 Dragos Dimitriu. GPL-3.0-or-later"),
+        StringStruct("OriginalFilename", "pdf45.exe"),
+        StringStruct("ProductName", "pdf/45"),
+        StringStruct("ProductVersion", pdf45.__version__),
+    ]
+    return VSVersionInfo(
+        ffi=FixedFileInfo(filevers=nums, prodvers=nums),
+        kids=[StringFileInfo([StringTable("040904B0", strings)]), VarFileInfo([VarStruct("Translation", [1033, 1200])])],
+    )
+
+
 a = Analysis(
     [str(SRC / "pdf45" / "__main__.py")],
     pathex=[str(SRC)],
@@ -60,6 +86,7 @@ exe = EXE(
     upx=False,
     console=False,
     icon=str(RES / ("pdf45.ico" if is_windows else "pdf45.png")),
+    version=windows_version_info() if is_windows else None,
 )
 coll = COLLECT(
     exe,

@@ -20,3 +20,5 @@ __version__ = "1.0.0"
 APP_NAME = "pdf/45"
 ORG_NAME = "pdf45"
 APP_ID = "pdf45"  # slash-free identifier for settings, paths and executables
+# Publisher of the Windows builds: must match the organisation on the code-signing certificate.
+PUBLISHER = "LAST CHANCE SRL"

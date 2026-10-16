@@ -7,6 +7,10 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
+; Must match the organisation on the code-signing certificate (src/pdf45/__init__.py: PUBLISHER).
+#ifndef AppPublisher
+  #define AppPublisher "LAST CHANCE SRL"
+#endif
 #define AppName "pdf/45"
 ; Windows folder and shortcut names cannot contain "/", so a safe variant is used for those.
 #define AppSafeName "pdf45"
@@ -18,7 +22,12 @@ AppId={{6E1B3B8E-7B1F-4E1A-9C3B-1C7E4B6D0F01}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=Dragos Dimitriu
+AppPublisher={#AppPublisher}
+AppCopyright=Copyright (C) 2026 Dragos Dimitriu. GPL-3.0-or-later
+VersionInfoVersion={#AppVersion}
+VersionInfoCompany={#AppPublisher}
+VersionInfoProductName={#AppName}
+VersionInfoDescription={#AppName} setup
 AppPublisherURL=https://github.com/dragosdimitriu/pdf45
 DefaultDirName={autopf}\{#AppSafeName}
 DefaultGroupName={#AppSafeName}

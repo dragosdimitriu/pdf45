@@ -67,6 +67,16 @@ jobs:
     name: Build Windows installer
     needs: test
     runs-on: windows-latest   # Inno Setup is preinstalled on the GitHub runner image
+    # Code signing with Azure Artifact Signing. It switches on by itself once the
+    # repository variable AZURE_SIGNING_ACCOUNT exists (see docs/code-signing.md);
+    # pull requests are never signed. The "signing" environment is what the Azure
+    # federated credential trusts (subject repo:<owner>/pdf45:environment:signing).
+    environment: ${{ github.event_name != 'pull_request' && vars.AZURE_SIGNING_ACCOUNT != '' && 'signing' || '' }}
+    permissions:
+      contents: read
+      id-token: write   # OIDC login to Azure, no stored password
+    env:
+      SIGN: ${{ github.event_name != 'pull_request' && vars.AZURE_SIGNING_ACCOUNT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -79,9 +89,46 @@ jobs:
         id: ver
         shell: bash
         run: echo "version=$(python -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')" >> "$GITHUB_OUTPUT"
+      - name: Azure login (OIDC)
+        if: env.SIGN == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign pdf45.exe
+        if: env.SIGN == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\pdf45\pdf45.exe
+          description: pdf/45
+          description-url: https://github.com/${{ github.repository }}
       - name: Inno Setup
         shell: cmd
         run: iscc /DAppVersion=${{ steps.ver.outputs.version }} packaging\windows\pdf45.iss
+      - name: Sign installer
+        if: env.SIGN == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist
+          files-folder-filter: exe
+          description: pdf/45 setup
+          description-url: https://github.com/${{ github.repository }}
+      - name: Check signatures
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          foreach ($f in @("dist\pdf45\pdf45.exe") + (Get-ChildItem dist\*-setup.exe).FullName) {
+            $s = Get-AuthenticodeSignature $f
+            "{0}: {1} - {2}" -f $f, $s.Status, $s.SignerCertificate.Subject
+            if ($s.Status -ne 'Valid') { throw "$f is not validly signed" }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: pdf45-windows-setup
