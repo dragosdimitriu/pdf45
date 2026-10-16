@@ -47,7 +47,7 @@ PyInstaller bundles cannot run on a glibc older than the build host's.
 ```powershell
 pip install -e ".[dev]"
 pyinstaller --noconfirm packaging\pdf45.spec
-iscc /DAppVersion=1.0.0 packaging\windows\pdf45.iss   # -> dist\pdf45-1.0.0-setup.exe
+iscc /DAppVersion=1.0.1 packaging\windows\pdf45.iss   # -> dist\pdf45-1.0.1-setup.exe
 ```
 
 Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`iscc` on PATH).

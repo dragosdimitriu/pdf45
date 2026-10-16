@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf45"
-version = "1.0.0"
+version = "1.0.1"
 description = "A small, free PDF viewer for Windows and Linux (view, search, print, sign with a hardware token)."
 readme = "README.md"
 license = "GPL-3.0-or-later"

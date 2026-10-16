@@ -5,7 +5,7 @@
 ; Output: dist\pdf45-<version>-setup.exe
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 ; Must match the organisation on the code-signing certificate (src/pdf45/__init__.py: PUBLISHER).
 #ifndef AppPublisher
