@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf45"
+version = "0.1.0"
+description = "A small, free PDF viewer for Windows and Linux (view, search, bookmarks, print)."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Dragos Dimitriu" }]
+keywords = ["pdf", "viewer", "qt", "pyside6"]
+classifiers = [
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Win32 (MS Windows)",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business",
+]
+dependencies = ["PySide6>=6.6,<7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyinstaller>=6.6", "reportlab>=4", "pypdf>=4", "pillow>=10"]
+
+[project.urls]
+Homepage = "https://github.com/dragosdimitriu/pdf45"
+
+[project.gui-scripts]
+pdf45 = "pdf45.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pdf45 = ["resources/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

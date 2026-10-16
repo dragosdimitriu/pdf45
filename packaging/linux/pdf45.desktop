@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=pdf/45
+GenericName=PDF Viewer
+Comment=View, search and print PDF documents
+Exec=pdf45 %f
+Icon=pdf45
+Terminal=false
+Categories=Office;Viewer;
+MimeType=application/pdf;
+StartupNotify=true
