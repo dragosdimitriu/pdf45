@@ -5,7 +5,7 @@
 ; Output: dist\pdf45-<version>-setup.exe
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "1.0.0"
 #endif
 #define AppName "pdf/45"
 ; Windows folder and shortcut names cannot contain "/", so a safe variant is used for those.

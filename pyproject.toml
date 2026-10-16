@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf45"
-version = "0.1.0"
-description = "A small, free PDF viewer for Windows and Linux (view, search, bookmarks, print)."
+version = "1.0.0"
+description = "A small, free PDF viewer for Windows and Linux (view, search, print, sign with a hardware token)."
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Dragos Dimitriu" }]
-keywords = ["pdf", "viewer", "qt", "pyside6"]
+keywords = ["pdf", "viewer", "qt", "pyside6", "pades", "electronic-signature", "pkcs11", "eidas"]
 classifiers = [
     "Environment :: X11 Applications :: Qt",
     "Environment :: Win32 (MS Windows)",
@@ -20,7 +20,16 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Office/Business",
 ]
-dependencies = ["PySide6>=6.6,<7"]
+dependencies = [
+    "PySide6>=6.6,<7",
+    # signing.trust patches pyhanko-certvalidator internals: keep these pinned to tested versions.
+    "pyHanko[pkcs11,etsi,opentype,image-support]>=0.37,<0.38",
+    "pyhanko-certvalidator>=0.32,<0.33",
+    "pypdfium2>=4.30",
+    "Pillow>=10",
+    "certifi",
+    "tzdata; sys_platform == 'win32'",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pyinstaller>=6.6", "reportlab>=4", "pypdf>=4", "pillow>=10"]
@@ -35,7 +44,7 @@ pdf45 = "pdf45.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-pdf45 = ["resources/*"]
+pdf45 = ["resources/*", "resources/fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

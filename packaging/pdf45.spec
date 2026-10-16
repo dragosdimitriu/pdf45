@@ -8,6 +8,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+
 ROOT = Path(SPECPATH).parent
 SRC = ROOT / "src"
 RES = SRC / "pdf45" / "resources"
@@ -17,9 +19,16 @@ is_windows = sys.platform.startswith("win")
 a = Analysis(
     [str(SRC / "pdf45" / "__main__.py")],
     pathex=[str(SRC)],
-    binaries=[],
-    datas=[(str(RES), "pdf45/resources")],
-    hiddenimports=["PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtPrintSupport"],
+    datas=[(str(RES), "pdf45/resources")]
+    # pyHanko ships the EU list-of-the-lists signer certificates, signxml its XML schemas.
+    + collect_data_files("pyhanko") + collect_data_files("signxml") + collect_data_files("certifi")
+    + collect_data_files("pypdfium2_raw") + collect_data_files("pypdfium2"),
+    binaries=collect_dynamic_libs("pypdfium2_raw"),
+    hiddenimports=["PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtPrintSupport"]
+    # pyHanko and friends import many modules lazily (stamp styles, fetchers, trusted-list parsing).
+    + collect_submodules("pyhanko") + collect_submodules("pyhanko_certvalidator")
+    + collect_submodules("pkcs11") + collect_submodules("pypdfium2") + collect_submodules("pypdfium2_raw") + collect_submodules("xsdata.formats.dataclass.parsers")
+    + ["tzlocal"] + (["tzdata"] if is_windows else []),
     hookspath=[],
     runtime_hooks=[],
     # Trim Qt modules the viewer never loads; keeps the bundle ~2x smaller.
@@ -35,7 +44,7 @@ a = Analysis(
         "PySide6.QtDesigner", "PySide6.QtHelp", "PySide6.QtUiTools", "PySide6.QtOpenGL",
         "PySide6.QtOpenGLWidgets", "PySide6.QtSpatialAudio", "PySide6.QtGraphs", "PySide6.QtStateMachine",
         "PySide6.QtNetworkAuth", "PySide6.QtPdfQuick", "PySide6.QtAsyncio",
-        "tkinter", "unittest", "pydoc", "doctest", "test",
+        "tkinter", "pydoc", "doctest", "test",
     ],
     noarchive=False,
 )

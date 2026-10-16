@@ -26,6 +26,7 @@ from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QDockWidget,
     QFileDialog,
     QInputDialog,
@@ -47,6 +48,8 @@ from PySide6.QtWidgets import (
 from pdf45 import APP_ID, APP_NAME, ORG_NAME, __version__
 from pdf45.credits import CREDITS_HTML, HELP_TEXT
 from pdf45.printing import page_range_from_printer, print_document
+from pdf45.signing import ui as sigui
+from pdf45.signing.overlay import SignedPdfView
 
 MAX_RECENT = 10
 ZOOM_STEP = 1.25
@@ -113,8 +116,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.resize(1100, 800)
         self.setAcceptDrops(True)
-        self.settings = QSettings(ORG_NAME, APP_ID)
+        self.settings = QSettings()  # organisation / application names are set in main()
         self.current_path: str | None = None
+        self._doc_password: str | None = None
+        self.sig_settings = sigui.SigningSettings(self.settings)
+        self._verify_generation = 0
 
         icon_path = _resource_path("pdf45.png")
         if icon_path.exists():
@@ -131,7 +137,7 @@ class MainWindow(QMainWindow):
         self.bookmark_model.setDocument(self.document)
 
         # --- central view -------------------------------------------------
-        self.view = QPdfView(self)
+        self.view = SignedPdfView(self)
         self.view.setDocument(self.document)
         self.view.setPageMode(QPdfView.PageMode.MultiPage)
         self.view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
@@ -144,6 +150,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_menus()
         self._build_sidebar()
+        self._build_signatures_dock()
         self.statusBar().showMessage("Open a PDF to begin (Ctrl+O).")
         self._restore_geometry()
         self._update_enabled()
@@ -194,6 +201,11 @@ class MainWindow(QMainWindow):
         self.act_find_next = act("Find &next", self.find_next, QKeySequence.StandardKey.FindNext)
         self.act_find_prev = act("Find &previous", self.find_prev, QKeySequence.StandardKey.FindPrevious)
 
+        self.act_sign = act("&Sign document…", self.sign_dialog, QKeySequence("Ctrl+Shift+E"),
+                            SP.SP_DialogApplyButton)
+        self.act_sig_panel = act("Signatures &panel", None, QKeySequence("F8"), checkable=True)
+        self.act_sig_settings = act("Signature s&ettings…", self.signature_settings)
+
         self.act_about = act("&About pdf/45", self.show_about)
         self.act_credits = act("&Credits", self.show_credits)
         self.act_help = act("&Help", self.show_help, QKeySequence.StandardKey.HelpContents)
@@ -206,6 +218,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(tb)
         tb.addAction(self.act_open)
         tb.addAction(self.act_print)
+        tb.addAction(self.act_sign)
         tb.addSeparator()
         tb.addAction(self.act_back)
         tb.addAction(self.act_forward)
@@ -272,6 +285,12 @@ class MainWindow(QMainWindow):
         m_go.addAction(self.act_back)
         m_go.addAction(self.act_forward)
 
+        m_sig = mb.addMenu("&Signature")
+        m_sig.addAction(self.act_sign)
+        m_sig.addAction(self.act_sig_panel)
+        m_sig.addSeparator()
+        m_sig.addAction(self.act_sig_settings)
+
         m_help = mb.addMenu("&Help")
         m_help.addAction(self.act_help)
         m_help.addSeparator()
@@ -306,6 +325,22 @@ class MainWindow(QMainWindow):
         self.act_sidebar.toggled.connect(self.sidebar.setVisible)
         self.sidebar.visibilityChanged.connect(self.act_sidebar.setChecked)
 
+    def _build_signatures_dock(self) -> None:
+        self.sig_dock = QDockWidget("Signatures", self)
+        self.sig_dock.setObjectName("signatures")
+        self.sig_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.sig_panel = sigui.SignaturesPanel(self.sig_dock)
+        self.sig_panel.signatureActivated.connect(self._goto_signature)
+        self.sig_panel.recheckRequested.connect(self.verify_signatures)
+        self.sig_panel.signRequested.connect(self.sign_dialog)
+        self.view.signatureClicked.connect(self._signature_clicked)
+        self.sig_dock.setWidget(self.sig_panel)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.sig_dock)
+        self.sig_dock.setMinimumWidth(280)
+        self.sig_dock.hide()
+        self.act_sig_panel.toggled.connect(self.sig_dock.setVisible)
+        self.sig_dock.visibilityChanged.connect(self.act_sig_panel.setChecked)
+
     # -------------------------------------------------------------- state
     def _update_enabled(self) -> None:
         has_doc = self.document.status() == QPdfDocument.Status.Ready
@@ -313,6 +348,7 @@ class MainWindow(QMainWindow):
             self.act_close, self.act_print, self.act_prev, self.act_next, self.act_first,
             self.act_last, self.act_goto, self.act_zoom_in, self.act_zoom_out, self.act_zoom_100,
             self.act_fit_width, self.act_fit_page, self.act_find, self.act_find_next, self.act_find_prev,
+            self.act_sign,
         ):
             a.setEnabled(has_doc)
         self.page_spin.setEnabled(has_doc)
@@ -332,12 +368,16 @@ class MainWindow(QMainWindow):
             self.bookmarks.expandToDepth(0)
             self.statusBar().showMessage(f"{name}: {n} page{'s' if n != 1 else ''}")
             self.navigator.jump(0, QPointF(), 0)
+            self.verify_signatures()
         elif status == QPdfDocument.Status.Error:
             self.statusBar().showMessage(f"Could not open: {self.document.error()}")
         elif status == QPdfDocument.Status.Null:
             self.page_spin.setMaximum(1)
             self.page_total.setText(" / 0 ")
             self.setWindowTitle(APP_NAME)
+            self._verify_generation += 1
+            self.sig_panel.clear("No document.")
+            self.view.clear_signatures()
         self._update_enabled()
 
     @Slot(int)
@@ -390,6 +430,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, APP_NAME, f"File not found:\n{path}")
             return False
         self.current_path = path
+        self._doc_password = None
+        self.view.clear_signatures()
         self.search_panel.edit.clear()
         err = self.document.load(path)
         if err != QPdfDocument.Error.None_:
@@ -415,6 +457,7 @@ class MainWindow(QMainWindow):
             self, APP_NAME, "This document is password protected.\nPassword:", QLineEdit.EchoMode.Password
         )
         if ok and pw:
+            self._doc_password = pw
             self.document.setPassword(pw)
         else:
             self.statusBar().showMessage("Password required; document not opened.")
@@ -594,6 +637,74 @@ class MainWindow(QMainWindow):
         self.settings.remove("recentFiles")
         self._rebuild_recent_menu()
 
+    # ---------------------------------------------------------- signatures
+    @Slot()
+    def sign_dialog(self) -> None:
+        if self.document.status() != QPdfDocument.Status.Ready or not self.current_path:
+            return
+        dlg = sigui.SignDialog(self.document, self.current_path, self._doc_password, self.sig_settings,
+                               self.navigator.currentPage(), self)
+        if dlg.exec() != QDialog.DialogCode.Accepted or not dlg.output_path:
+            return
+        out, level, password = dlg.output_path, dlg.level, self._doc_password
+        if self.open_file(out):
+            self._doc_password = password
+            if password:
+                self.document.setPassword(password)
+            self.sig_dock.show()
+            QMessageBox.information(self, "Signed", f"The document was signed ({level}) and saved as:\n{out}")
+
+    @Slot(int)
+    def _goto_signature(self, index: int) -> None:
+        where = self.view.signature_location(index)
+        if where is not None:
+            self.navigator.jump(where[0], where[1], self.view.zoomFactor())
+        elif self.sig_panel.results[index].page is not None:
+            self.goto_page(self.sig_panel.results[index].page)
+
+    @Slot(int)
+    def _signature_clicked(self, index: int) -> None:
+        self.sig_dock.show()
+        self.sig_panel.select(index)
+
+    @Slot()
+    def signature_settings(self) -> None:
+        sigui.SettingsDialog(self.sig_settings, self).exec()
+
+    @Slot()
+    def verify_signatures(self) -> None:
+        """Validate the signatures of the open document in a worker thread."""
+        self._verify_generation += 1
+        gen = self._verify_generation
+        path = self.current_path
+        if not path or self.document.status() != QPdfDocument.Status.Ready:
+            return
+        self.sig_panel.set_busy("Looking for signatures…")
+        snapshot = {"online": self.sig_settings.online_checks}
+        w = sigui.Worker(sigui.verify_with_eu, path, self._doc_password, snapshot,
+                         sigui.trust_store(self.sig_settings), parent=self)
+        w.progress.connect(lambda m: gen == self._verify_generation and self.sig_panel.set_busy(m))
+        w.partial.connect(lambda r: gen == self._verify_generation and self._show_signatures(r, final=False))
+        w.done.connect(lambda r: gen == self._verify_generation and self._show_signatures(r, final=True))
+        w.failed.connect(lambda m: gen == self._verify_generation and self.sig_panel.clear(
+            "Signatures could not be checked:\n" + m.splitlines()[0]))
+        w.start()
+
+    def _show_signatures(self, result: dict, final: bool) -> None:
+        results = result["results"]
+        if not results:
+            self.sig_panel.clear()
+            return
+        self.sig_panel.set_results(results, result.get("eu", False), result.get("eu_error"))
+        self.view.set_signatures(self.current_path, self._doc_password, results)
+        if not final:
+            self.sig_panel.set_busy("Checking against the EU trusted lists…")
+        self.sig_dock.show()
+        n = len(results)
+        ok = sum(1 for r in results if r.verdict.ok)
+        self.statusBar().showMessage(
+            f"{os.path.basename(self.current_path or '')}: {n} signature{'s' if n != 1 else ''}, {ok} valid")
+
     # --------------------------------------------------------------- help
     @Slot()
     def show_about(self) -> None:
@@ -647,8 +758,49 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 
+def verify_cli(path: str, report: str | None = None) -> int:
+    """``pdf45 --verify file.pdf [--report out.txt]``: check signatures without the GUI.
+
+    Exit code: 0 all signatures valid, 1 some are not, 2 no signatures / error.
+    """
+    from PySide6.QtCore import QCoreApplication
+
+    from pdf45.signing.verify import verify_document
+
+    QCoreApplication.setApplicationName(APP_ID)
+    QCoreApplication.setOrganizationName(ORG_NAME)
+    settings = sigui.SigningSettings(QSettings())
+    lines: list[str] = []
+    trust = sigui.trust_store(settings)
+    try:
+        results = verify_document(path, trust, online=settings.online_checks)
+    except Exception as e:
+        lines.append(f"error: {e.__class__.__name__}: {e}")
+        results = None
+    if trust.eu.error:
+        lines.append(f"warning: EU trusted lists unavailable ({trust.eu.error}); qualified status not checked")
+    if results == []:
+        lines.append("no signatures")
+    for r in results or []:
+        q = " [qualified]" if r.qualified else ""
+        ts = f", timestamp {r.timestamp_time:%Y-%m-%d %H:%M:%S %Z}" if r.timestamp_time else ""
+        lines.append(f"{r.field_name}: {r.verdict.name}{q} - {r.signer} ({r.issuer}){ts}")
+    text = "\n".join(lines) + "\n"
+    if report:
+        Path(report).write_text(text, encoding="utf-8")
+    elif sys.stdout is not None:
+        sys.stdout.write(text)
+    if not results:
+        return 2
+    return 0 if all(r.verdict.ok for r in results) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv)
+    if "--verify" in argv:
+        i = argv.index("--verify")
+        report = argv[argv.index("--report") + 1] if "--report" in argv else None
+        return verify_cli(argv[i + 1], report) if i + 1 < len(argv) else 2
     QApplication.setApplicationName(APP_ID)
     QApplication.setOrganizationName(ORG_NAME)
     QApplication.setApplicationVersion(__version__)
